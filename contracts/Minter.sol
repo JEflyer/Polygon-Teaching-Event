@@ -86,11 +86,24 @@ contract Minter is ERC721Enumerable {
 
         minted[msg.sender] = true;
 
-        _mint(1,msg.sender);
+        _mint(msg.sender,totalSupply() + 1);
 
     }
 
-    function tokenURI(uint256 tokenID) external view returns(string memory){
+    function tokenURI(uint256 tokenID) public view override returns(string memory){
         return string(abi.encodePacked(baseURI,tokenID,".json"));
+    }
+
+    function walletOfOwner(address _owner)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        uint256 ownerTokenCount = balanceOf(_owner);
+        uint256[] memory tokenIds = new uint256[](ownerTokenCount);
+        for (uint256 i; i < ownerTokenCount; i++) {
+        tokenIds[i] = tokenOfOwnerByIndex(_owner, i);
+        }
+        return tokenIds;
     }
 }

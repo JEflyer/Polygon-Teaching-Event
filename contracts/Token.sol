@@ -28,7 +28,7 @@ contract Token is ERC20 {
         staking = _staking;
     }
 
-    function _transfer(address from, address to, uint256 amount) internal {
+    function _transfer(address from, address to, uint256 amount) internal override {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
 
@@ -36,8 +36,8 @@ contract Token is ERC20 {
 
         uint256 fromBalance = _balances[from];
         require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
+        uint256 burnFee = (amount/100);
         unchecked {
-            uint256 burnFee = (amount/100);
             _balances[from] = fromBalance - amount;
             // Overflow not possible: the sum of all balances is capped by totalSupply, and the sum is preserved by
             // decrementing then incrementing.
@@ -53,6 +53,7 @@ contract Token is ERC20 {
 
     function Mint(address to, uint256 amount) external returns(bool) {
         require(msg.sender == staking,"ERR:NA");//NA => Not Allowed
-
+        _mint(to,amount);
+        return true;
     }
 }   

@@ -4,6 +4,8 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "hardhat/console.sol";
+
 interface ICoin is IERC20 {
     function Mint(address to, uint256 amount) external returns(bool);
 }
@@ -32,6 +34,8 @@ contract Staking {
 
     uint256 public timeLastUpdated;
 
+    uint256 private amountDue;
+
     constructor(
         uint256 initialTreasury,
         address _token,
@@ -42,7 +46,7 @@ contract Staking {
         require(minter != address(0),"ERR:NA2");//NA2 => Null Address 2
 
         NFTMinter = IERC721(minter);
-        token = IERC20(_token);
+        token = ICoin(_token);
         stepInfo[1].treasury = initialTreasury;
     }
 
@@ -81,6 +85,9 @@ contract Staking {
     function unstake(uint256 tokenId) external {
         //Check that the NFT has been staked
         require(stepStaked[tokenId] > 0,"ERR:NS");//NS => Not Staked
+
+        //Get the current Step ID
+        uint256 currentStepID = latestStepID;
 
         //Check that the current step did not start this second - This is actually a security check to make sure a contact is not staking & unstaking to cause multiple steps to occur during the same second
         require(stepInfo[currentStepID].timeStepStarted < block.timestamp,"ERR:TS");//TS => Too Soon 
@@ -134,6 +141,9 @@ contract Staking {
         //Check that the NFT has been staked
         require(stepStaked[tokenId] > 0,"ERR:NS");//NS => Not Staked
 
+        //Get the current Step ID
+        uint256 currentStepID = latestStepID;
+
         //Check that the current step did not start this second - This is actually a security check to make sure a contact is not staking & unstaking to cause multiple steps to occur during the same second
         require(stepInfo[currentStepID].timeStepStarted < block.timestamp,"ERR:TS");//TS => Too Soon 
 
@@ -158,9 +168,6 @@ contract Staking {
         //Calculate the due reward for the user
         uint256 reward = getDueReward(tokenId);
 
-        //Get the current Step ID 
-        uint256 currentStepID = latestStepID;
-
         //Set the step that the NFT was staked on as the next step
         stepStaked[tokenId] = currentStepID + 1;
         
@@ -177,16 +184,23 @@ contract Staking {
         //Get current Step ID
         uint256 currentStepID = latestStepID;
 
-        if(currentStepID == 0){
+        if(currentStepID == 0 || stepInfo[currentStepID].totalNFTsStaked == 0){
             currentStepID = 1;
             latestStepID = currentStepID;
             stepInfo[currentStepID].totalNFTsStaked = NFTsStaked;
             stepInfo[currentStepID].timeStepStarted = block.timestamp;
         }else {
-            stepInfo[currentStepID].timeStepEnded = block.timestamp - 1;
-            stepInfo[currentStepID].totalRewardThisStep = stepInfo[currentStepID].treasury * (block.timestamp - 1 - stepInfo[currentStepID].timeStepStarted) / 100000;
+            console.log("Got here");
+            stepInfo[currentStepID].timeStepEnded = block.timestamp;
+            stepInfo[currentStepID].totalRewardThisStep = stepInfo[currentStepID].treasury * (block.timestamp - stepInfo[currentStepID].timeStepStarted) / 100000;
             stepInfo[currentStepID + 1].treasury = stepInfo[currentStepID].treasury - stepInfo[currentStepID].totalRewardThisStep;
             stepInfo[currentStepID + 1].totalNFTsStaked = NFTsStaked;  
+            stepInfo[currentStepID + 1].timeStepStarted = block.timestamp + 1;
+
+            if(amountDue > 0){
+                stepInfo[currentStepID + 1].treasury += amountDue;
+                amountDue = 0;
+            }
 
             latestStepID = currentStepID + 1;
         }
@@ -203,7 +217,7 @@ contract Staking {
 
         //Check if the step staked on equals the current step
         if(StepStakedOn == latestStepID){
-            uint256 reward = stepInfo[StepStakedOn].treasury  * (block.timestamp - 1 - stepInfo[StepStakedOn].timeStepStarted) / 100000 / stepInfo[StepStakedOn].totalNFTsStaked;
+            uint256 reward = stepInfo[StepStakedOn].treasury  * (block.timestamp - stepInfo[StepStakedOn].timeStepStarted) / 100000 / stepInfo[StepStakedOn].totalNFTsStaked;
 
             return reward; 
         }else{
@@ -219,7 +233,7 @@ contract Staking {
             }
 
 
-            reward += stepInfo[latestStepID].treasury  * (block.timestamp - 1 - stepInfo[latestStepID].timeStepStarted) / 100000 / stepInfo[latestStepID].totalNFTsStaked;
+            reward += stepInfo[latestStepID].treasury  * (block.timestamp  - stepInfo[latestStepID].timeStepStarted) / 100000 / stepInfo[latestStepID].totalNFTsStaked;
 
             return reward; 
         }
@@ -236,5 +250,12 @@ contract Staking {
         token.Mint(msg.sender, 1 * 10 ** 18);
 
         //Emit event
+    }
+
+    function update(uint256 amount) external returns(bool){
+        require(msg.sender == address(token),"ERR:NA");//NA => Not Allowed
+    
+        amountDue += amount;
+        return true;
     }
 }
